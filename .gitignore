@@ -31,7 +31,6 @@ venv.bak/
 
 # Environment variables
 .env
-config.py
 
 # IDE
 .vscode/
