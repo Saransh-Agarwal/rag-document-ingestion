@@ -1,0 +1,50 @@
+RAG Document Ingestion Pipeline - Sample Document
+
+Introduction
+This is a sample document to demonstrate the RAG (Retrieval Augmented Generation) document ingestion pipeline. The pipeline processes documents through multiple stages including fetching, parsing, embedding generation, and vector storage.
+
+Architecture Overview
+The system is built using several key components:
+
+1. Temporal.io for workflow orchestration
+2. Unstructured.io for document parsing
+3. OpenAI API for embedding generation
+4. Milvus for vector database storage
+
+Key Features
+- Asynchronous processing using Python asyncio
+- Robust error handling and retry mechanisms
+- Rate limiting for API calls
+- Sophisticated text chunking strategies
+- Comprehensive monitoring and logging
+- Batch processing for efficient storage
+
+Technical Implementation
+The workflow consists of four main activities:
+
+1. Document Fetching: Downloads documents from provided URLs with validation and size limits
+2. Document Parsing: Extracts and chunks text using advanced parsing techniques
+3. Embedding Generation: Creates vector embeddings for semantic search
+4. Vector Storage: Stores chunks and embeddings in Milvus database
+
+Concurrency and Performance
+The system leverages Python's asyncio for efficient concurrent processing. This allows multiple I/O-bound operations to run simultaneously without blocking the event loop, significantly improving throughput and resource utilization.
+
+Error Handling
+Custom exception types are implemented for different error scenarios:
+- DocumentFetchError for download issues
+- DocumentParseError for parsing failures
+- EmbeddingError for API-related problems
+- StorageError for database issues
+
+Each activity includes retry policies with exponential backoff to handle transient failures gracefully.
+
+Monitoring and Observability
+The system includes comprehensive metrics collection covering:
+- Activity execution times
+- Success and failure rates
+- Resource usage statistics
+- Processing throughput
+
+Conclusion
+This RAG document ingestion pipeline demonstrates best practices for building scalable, reliable document processing systems using modern Python technologies and cloud-native architectures. 
