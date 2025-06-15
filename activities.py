@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 from unstructured.partition.auto import partition
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI
 from milvus_utils import batch_insert_chunks
-from config import OPENAI_API_KEY
+from config import AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT_NAME, AZURE_OPENAI_API_VERSION
 from rate_limiter import TokenBucketRateLimiter
 from chunking import ChunkingStrategy, ChunkingConfig
 from monitoring import WorkflowMetrics
@@ -104,7 +104,11 @@ async def parse_document(file_path: str) -> List[str]:
 @activity.defn
 async def generate_embeddings(chunks: List[str]) -> List[List[float]]:
     with metrics.measure_activity("generate_embeddings", {"chunk_count": len(chunks)}) as activity_metrics:
-        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        client = AsyncAzureOpenAI(
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            api_key=AZURE_OPENAI_API_KEY,
+            api_version=AZURE_OPENAI_API_VERSION
+        )
         try:
             embeddings = []
             for chunk in chunks:
@@ -113,7 +117,7 @@ async def generate_embeddings(chunks: List[str]) -> List[List[float]]:
                 
                 response = await client.embeddings.create(
                     input=[chunk],
-                    model="text-embedding-ada-002"
+                    model=AZURE_OPENAI_DEPLOYMENT_NAME
                 )
                 embeddings.extend([d.embedding for d in response.data])
             

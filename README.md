@@ -1,6 +1,6 @@
 # RAG Document Ingestion Pipeline
 
-A robust and scalable document ingestion pipeline built with Temporal.io, leveraging Python's asyncio for efficient concurrent processing. This system processes documents from various sources, generates embeddings, and stores them in a Milvus vector database for subsequent use in RAG (Retrieval Augmented Generation) workflows.
+A robust and scalable document ingestion pipeline built with Temporal.io, leveraging Python's asyncio for efficient concurrent processing. This system processes documents from various sources, generates embeddings using Azure OpenAI, and stores them in a Milvus vector database for subsequent use in RAG (Retrieval Augmented Generation) workflows.
 
 ## Features
 
@@ -11,12 +11,13 @@ A robust and scalable document ingestion pipeline built with Temporal.io, levera
 - **Error Handling**: Robust error handling with custom exceptions and retry policies
 - **Concurrent Processing**: Efficient async/await patterns for I/O-bound operations
 - **Vector Storage**: Milvus integration for efficient vector storage and retrieval
+- **Azure OpenAI Integration**: Uses Azure OpenAI for embedding generation
 
 ## Prerequisites
 
 - Python 3.8+
 - Docker and Docker Compose
-- OpenAI API key
+- Azure OpenAI resource and API key
 - Milvus instance (included in docker-compose)
 
 ## Installation
@@ -45,11 +46,15 @@ cp config.py.example config.py
 
 ## Configuration
 
-Update `config.py` with your settings:
+Update `config.py` with your Azure OpenAI settings:
 ```python
-OPENAI_API_KEY = "your-api-key"
+AZURE_OPENAI_ENDPOINT = "https://your-resource.openai.azure.com/"
+AZURE_OPENAI_API_KEY = "your-azure-openai-key"
+AZURE_OPENAI_DEPLOYMENT_NAME = "text-embedding-ada-002"  # Your deployment name
+AZURE_OPENAI_API_VERSION = "2024-02-01"
 MILVUS_HOST = "localhost"
 MILVUS_PORT = 19530
+TEMPORAL_ADDRESS = "localhost:7233"
 ```
 
 ## Running the Services
@@ -86,7 +91,7 @@ python client.py --file-id "doc123" --url "https://example.com/document.pdf"
 2. **Activities**
    - `fetch_document`: Downloads document from URL
    - `parse_document`: Extracts and chunks text using Unstructured.io
-   - `generate_embeddings`: Creates embeddings using OpenAI API
+   - `generate_embeddings`: Creates embeddings using Azure OpenAI API
    - `store_in_milvus`: Stores chunks and embeddings in Milvus
 
 3. **Utilities**
@@ -141,5 +146,5 @@ MIT License
 
 - Temporal.io for workflow orchestration
 - Unstructured.io for document parsing
-- OpenAI for embeddings
+- Azure OpenAI for embeddings
 - Milvus for vector storage
