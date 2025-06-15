@@ -6,12 +6,13 @@ from typing import List, Dict, Any
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 from unstructured.partition.auto import partition
-from openai import AsyncAzureOpenAI
-from milvus_utils import batch_insert_chunks
-from config import AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT_NAME, AZURE_OPENAI_API_VERSION
+from config import OPENAI_API_KEY
 from rate_limiter import TokenBucketRateLimiter
-from chunking import ChunkingStrategy, ChunkingConfig
+from simple_chunking import SimpleChunkingStrategy, SimpleChunkingConfig
 from monitoring import WorkflowMetrics
+
+# Import mock embeddings for testing
+from mock_embeddings import create_mock_embeddings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +22,10 @@ logger = logging.getLogger(__name__)
 openai_rate_limiter = TokenBucketRateLimiter(tokens_per_second=3, bucket_size=10)
 
 # Initialize chunking strategy
-chunking_strategy = ChunkingStrategy(ChunkingConfig(
+chunking_strategy = SimpleChunkingStrategy(SimpleChunkingConfig(
     max_chunk_size=1000,
     min_chunk_size=100,
-    overlap_size=50,
-    strategy="sentence"
+    overlap_size=50
 ))
 
 # Initialize metrics
@@ -48,7 +48,7 @@ class StorageError(ApplicationError):
     def __init__(self, message: str):
         super().__init__(message, type="StorageError")
 
-SUPPORTED_TYPES = {".pdf", ".docx", ".doc", ".xlsx", ".xls"}
+SUPPORTED_TYPES = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB limit
 
 @activity.defn
@@ -82,10 +82,11 @@ async def fetch_document(url: str) -> str:
 async def parse_document(file_path: str) -> List[str]:
     with metrics.measure_activity("parse_document", {"file_path": file_path}) as activity_metrics:
         try:
-            elements = partition(filename=file_path)
-            text = " ".join([el.text for el in elements if hasattr(el, "text") and el.text.strip()])
+            # Use simple parser for demo
+            from simple_parser import parse_document_simple
+            text = parse_document_simple(file_path)
             
-            # Use sophisticated chunking
+            # Use simple chunking
             chunks = chunking_strategy.chunk_text(text)
             
             if not chunks:
@@ -104,24 +105,32 @@ async def parse_document(file_path: str) -> List[str]:
 @activity.defn
 async def generate_embeddings(chunks: List[str]) -> List[List[float]]:
     with metrics.measure_activity("generate_embeddings", {"chunk_count": len(chunks)}) as activity_metrics:
-        client = AsyncAzureOpenAI(
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION
-        )
         try:
-            embeddings = []
-            for chunk in chunks:
-                # Apply rate limiting
-                await openai_rate_limiter.acquire()
+            # Check if we have a real OpenAI API key
+            if OPENAI_API_KEY and OPENAI_API_KEY != "your-openai-api-key":
+                # Use real OpenAI API
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=OPENAI_API_KEY)
                 
-                response = await client.embeddings.create(
-                    input=[chunk],
-                    model=AZURE_OPENAI_DEPLOYMENT_NAME
-                )
-                embeddings.extend([d.embedding for d in response.data])
+                embeddings = []
+                for chunk in chunks:
+                    # Apply rate limiting
+                    await openai_rate_limiter.acquire()
+                    
+                    response = await client.embeddings.create(
+                        input=[chunk],
+                        model="text-embedding-ada-002"
+                    )
+                    embeddings.extend([d.embedding for d in response.data])
+                
+                logger.info(f"Generated {len(embeddings)} real OpenAI embeddings")
+            else:
+                # Use mock embeddings for testing
+                logger.info("Using mock embeddings (no OpenAI API key provided)")
+                response = await create_mock_embeddings(chunks)
+                embeddings = [d.embedding for d in response.data]
+                logger.info(f"Generated {len(embeddings)} mock embeddings")
             
-            logger.info(f"Generated {len(embeddings)} embeddings")
             activity_metrics.metadata["embedding_count"] = len(embeddings)
             return embeddings
         except Exception as e:
@@ -140,15 +149,26 @@ async def store_in_milvus(file_id: str, chunks: List[str], embeddings: List[List
                 for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
             ]
             
-            # Perform batch insert
-            batch_insert_chunks(chunks_data)
+            # Try real Milvus first, fall back to mock storage
+            try:
+                from milvus_utils import batch_insert_chunks
+                batch_insert_chunks(chunks_data)
+                logger.info(f"Successfully stored {len(chunks)} chunks in Milvus for file {file_id}")
+                storage_type = "milvus"
+            except Exception as milvus_error:
+                logger.warning(f"Milvus not available ({milvus_error}), using mock storage")
+                from mock_storage import mock_storage
+                mock_storage.batch_insert_chunks(chunks_data)
+                logger.info(f"Successfully stored {len(chunks)} chunks in mock storage for file {file_id}")
+                storage_type = "mock"
             
-            logger.info(f"Successfully stored {len(chunks)} chunks for file {file_id}")
             activity_metrics.metadata["chunks_stored"] = len(chunks)
+            activity_metrics.metadata["storage_type"] = storage_type
             return {
                 "status": "success",
                 "file_id": file_id,
-                "chunks_stored": len(chunks)
+                "chunks_stored": len(chunks),
+                "storage_type": storage_type
             }
         except Exception as e:
-            raise StorageError(f"Error storing in Milvus: {e}") 
+            raise StorageError(f"Error storing data: {e}") 

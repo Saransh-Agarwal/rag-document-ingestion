@@ -14,6 +14,7 @@ VECTOR_DIM = 1536  # OpenAI embedding size
 BATCH_SIZE = 100  # Number of records to insert in one batch
 
 fields = [
+    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
     FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=128, is_primary=False),
     FieldSchema(name="chunk_index", dtype=DataType.INT64, is_primary=False),
     FieldSchema(name="chunk_text", dtype=DataType.VARCHAR, max_length=16384, is_primary=False),
@@ -61,6 +62,7 @@ def batch_insert_chunks(chunks_data: List[Tuple[str, int, str, List[float]]]):
             
             # Insert when batch size is reached
             if len(file_ids) >= BATCH_SIZE:
+                # Note: We don't include the primary key 'id' as it's auto-generated
                 data = [file_ids, chunk_indices, chunk_texts, embeddings]
                 col.insert(data)
                 logger.info(f"Inserted batch of {len(file_ids)} chunks")
@@ -68,6 +70,7 @@ def batch_insert_chunks(chunks_data: List[Tuple[str, int, str, List[float]]]):
         
         # Insert remaining chunks
         if file_ids:
+            # Note: We don't include the primary key 'id' as it's auto-generated
             data = [file_ids, chunk_indices, chunk_texts, embeddings]
             col.insert(data)
             logger.info(f"Inserted final batch of {len(file_ids)} chunks")
@@ -83,6 +86,7 @@ async def insert_chunk(file_id: str, chunk_index: int, chunk_text: str, embeddin
     try:
         ensure_collection()
         col = Collection(COLLECTION_NAME)
+        # Note: We don't include the primary key 'id' as it's auto-generated
         data = [[file_id], [chunk_index], [chunk_text], [embedding]]
         col.insert(data)
         logger.debug(f"Inserted chunk {chunk_index} for file {file_id}")
